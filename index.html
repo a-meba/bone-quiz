@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인체 골격 계통 주관식 학습 (좌표 업데이트)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0; padding: 0; height: 100%; overflow: hidden;
+            background-color: #f8fafc;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+        }
+
+        .app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+        header {
+            flex-shrink: 0; background: white; padding: 12px 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); z-index: 100;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .game-area {
+            flex-grow: 1; position: relative; display: flex;
+            justify-content: center; align-items: flex-start;
+            overflow: auto; padding: 20px; background: #f1f5f9;
+        }
+
+        .skeleton-wrapper {
+            position: relative; display: inline-block;
+            background: white; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+
+        #main-img {
+            display: block; max-width: none; height: 1100px;
+            width: auto; user-select: none; -webkit-user-drag: none;
+        }
+
+        .label-container {
+            position: absolute; z-index: 10; display: flex; align-items: center;
+        }
+
+        .label-mask {
+            background-color: #0f172a; border: 1px solid #1e293b;
+            border-radius: 4px; cursor: pointer; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 11px; font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* Edit Mode Styles */
+        .edit-mode .label-container {
+            outline: 2px dashed #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+        
+        .edit-mode .label-mask {
+            pointer-events: none; opacity: 0.6;
+        }
+
+        /* Resize Handles */
+        .resize-handle {
+            position: absolute; width: 10px; height: 10px;
+            background: #f59e0b; border: 1px solid white;
+            display: none; z-index: 25;
+        }
+        .edit-mode .resize-handle { display: block; }
+        
+        .handle-tl { top: -5px; left: -5px; cursor: nw-resize; }
+        .handle-tr { top: -5px; right: -5px; cursor: ne-resize; }
+        .handle-bl { bottom: -5px; left: -5px; cursor: sw-resize; }
+        .handle-br { bottom: -5px; right: -5px; cursor: se-resize; }
+
+        .quiz-input {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            border-radius: 4px; border: 2px solid #3b82f6;
+            padding: 0 4px; font-size: 12px; outline: none;
+            display: none; z-index: 15; text-align: center; background: white;
+        }
+
+        .result-label {
+            position: absolute; top: 0;
+            width: auto; min-width: 100%; height: 100%;
+            display: none; align-items: center; justify-content: center;
+            padding: 0 12px; border-radius: 4px; font-size: 13px; font-weight: bold;
+            white-space: nowrap; z-index: 20; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            pointer-events: none;
+        }
+
+        /* 정답 박스가 왼쪽으로 더 확실히 붙도록 조정 */
+        .result-align-left { right: 2px; left: auto; transform: translateX(0); }
+        .result-align-right { left: 0; right: auto; }
+
+        .result-correct { background-color: #dcfce7; border: 2px solid #22c55e; color: #166534; display: flex; }
+        .result-wrong { background-color: #fee2e2; border: 2px solid #ef4444; color: #991b1b; display: flex; }
+
+        footer {
+            flex-shrink: 0; background: #0f172a; color: #94a3b8;
+            padding: 10px; text-align: center; font-size: 13px;
+        }
+        
+        .edit-controls { display: none; gap: 8px; }
+        .edit-mode-active .edit-controls { display: flex; }
+
+        .guide-banner {
+            background: #eff6ff; border-bottom: 1px solid #dbeafe;
+            padding: 8px 24px; display: flex; align-items: center; gap: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 text-white p-2 rounded-lg">⚙️</div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800 leading-tight">골격 퀴즈 마스터</h1>
+                    <p id="header-desc" class="text-xs text-gray-500 font-medium">인체 해부학 골격 명칭 학습 시스템</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <div class="edit-controls">
+                    <button onclick="addNewLabel()" class="px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 shadow-sm transition">상자 추가 +</button>
+                    <button onclick="copyNewCoordinates()" class="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 shadow-sm transition">데이터 복사</button>
+                </div>
+                <button id="toggle-edit" onclick="toggleEditMode()" class="px-4 py-2 bg-amber-500 text-white font-bold rounded-lg hover:bg-amber-600 shadow-md transition">편집 모드 시작</button>
+                <button onclick="resetGame()" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">초기화</button>
+            </div>
+        </header>
+
+        <div class="guide-banner">
+            <span class="text-blue-600 font-bold text-sm">💡 입력 예시:</span>
+            <span class="text-gray-600 text-sm">한글(구/신용어) 또는 영문을 입력하세요 (예: 빗장뼈, 쇄골, clavicle)</span>
+        </div>
+        
+        <main class="game-area">
+            <div id="game-viewport" class="skeleton-wrapper">
+                <img id="main-img" src="https://github.com/a-meba/bone-quiz/blob/main/bone%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8.jpg?raw=true" alt="인체 골격도">
+            </div>
+        </main>
+        
+        <footer>
+            상자를 클릭하여 정답을 입력하세요. 엔터 키를 누르면 결과가 표시됩니다.
+        </footer>
+    </div>
+
+    <script>
+        // 사용자가 제공한 최신 좌표 데이터로 업데이트됨
+        let labels = [
+            { "answer": "머리뼈", "full": "머리뼈 (skull)", "x": 10.95, "y": 14.65, "w": 3.64, "h": 2.65, "align": "left" },
+            { "answer": "팔이음뼈", "full": "팔이음뼈 (shoulder girdle)", "x": 9.6, "y": 21.95, "w": 4.99, "h": 3.93, "align": "left" },
+            { "answer": "가슴우리", "full": "가슴우리 (thoracic cage)", "x": 9.89, "y": 29.08, "w": 4.89, "h": 4.02, "align": "left" },
+            { "answer": "골반", "full": "골반 (pelvis)", "x": 11.62, "y": 44.08, "w": 3.35, "h": 2.65, "align": "left" },
+            { "answer": "무릎뼈", "full": "무릎뼈 (patella)", "x": 9.7, "y": 69.22, "w": 8.44, "h": 1.71, "align": "left" },
+            { "answer": "발목뼈", "full": "발목뼈 (tarsus)", "x": 9.605754082612872, "y": 90.21636363636364, "w": 8.444245917387128, "h": 1.7272727272727275, "align": "left" },
+            { "answer": "이마뼈", "full": "이마뼈 (frontal bone)", "x": 18.56, "y": 9.78, "w": 3.83, "h": 4.04, "align": "left" },
+            { "answer": "위턱뼈", "full": "위턱뼈 (maxilla)", "x": 18.84, "y": 14.23, "w": 3.64, "h": 2.8 },
+            { "answer": "아래턱뼈", "full": "아래턱뼈 (mandible)", "x": 17.12, "y": 17.72, "w": 5.47, "h": 2.44 },
+            { "answer": "빗장뼈", "full": "빗장뼈(쇄골), clavicle", "x": 52.97, "y": 21.73181818181818, "w": 9.231508165225744, "h": 1.9999999999999998, "alt": "쇄골" },
+            { "answer": "빗장뼈", "full": "빗장뼈(쇄골), clavicle", "x": 18.29, "y": 20.91, "w": 4.428434197886648, "h": 2.8181818181818183, "alt": "쇄골" },
+            { "answer": "어깨뼈", "full": "어깨뼈(견갑골), scapula", "x": 52.97, "y": 24.44909090909091, "w": 9.423631123919309, "h": 2.1818181818181817, "alt": "견갑골" },
+            { "answer": "어깨뼈", "full": "어깨뼈(견갑골), scapula", "x": 16.66, "y": 24, "w": 6.06147934678194, "h": 2.727272727272727, "alt": "견갑골" },
+            { "answer": "복장뼈", "full": "복장뼈 (sternum)", "x": 17.74, "y": 27.27, "w": 4.81, "h": 2.71 },
+            { "answer": "갈비뼈", "full": "갈비뼈 (ribs)", "x": 16.44, "y": 30.44, "w": 6.33, "h": 1.18 },
+            { "answer": "갈비연골", "full": "갈비연골 (costal cartilages)", "x": 16.93, "y": 32.34, "w": 5.95, "h": 4.23, "align": "left" },
+            { "answer": "척주", "full": "척주 (vertebral column)", "x": 12.8, "y": 39.23, "w": 9.84, "h": 2.75 },
+            { "answer": "볼기뼈", "full": "볼기뼈 (hip bone)", "x": 17.22, "y": 42.73, "w": 5.52, "h": 2.44 },
+            { "answer": "엉치뼈", "full": "엉치뼈 (sacrum)", "x": 18.17, "y": 45.63, "w": 4.66, "h": 2.44 },
+            { "answer": "꼬리뼈", "full": "꼬리뼈 (coccyx)", "x": 9.39, "y": 48.15, "w": 8.71, "h": 1.77, "align": "left" },
+            { "answer": "손목뼈", "full": "손목뼈 (carpus)", "x": 9.68, "y": 51.04, "w": 8.33, "h": 1.71, "align": "left" },
+            { "answer": "손허리뼈", "full": "손허리뼈 (metacarpal)", "x": 10.65, "y": 53.54, "w": 7.31, "h": 3.89, "align": "left" },
+            { "answer": "손가락뼈", "full": "손가락뼈 (phalanges)", "x": 11.6, "y": 58.09, "w": 6.45, "h": 2.62, "align": "left" },
+            { "answer": "광대뼈", "full": "광대뼈 (zygomatic)", "x": 40.22, "y": 9.5, "w": 6.39, "h": 2.53 },
+            { "answer": "관자뼈", "full": "관자뼈 (temporal)", "x": 41.9, "y": 16.95, "w": 5.25, "h": 2.25 },
+            { "answer": "아래턱뼈", "full": "아래턱뼈 (mandible)", "x": 51.36, "y": 18.73, "w": 10.96, "h": 1.25 },
+            { "answer": "위팔뼈", "full": "위팔뼈 (humerus)", "x": 52.32, "y": 30.09, "w": 9.71, "h": 1.18 },
+            { "answer": "엉덩뼈", "full": "엉덩뼈 (ilium)", "x": 49.34, "y": 42.09, "w": 8.62, "h": 1.71 },
+            { "answer": "자뼈", "full": "자뼈 (ulna)", "x": 54.4, "y": 45.98, "w": 6.23, "h": 1.16 },
+            { "answer": "노뼈", "full": "노뼈 (radius)", "x": 53.92, "y": 48.25, "w": 6.6, "h": 1.44 },
+            { "answer": "두덩뼈", "full": "두덩뼈(치골), pubis", "x": 34.44, "y": 55.91, "w": 3.75, "h": 2.44, "alt": "치골" },
+            { "answer": "궁둥뼈", "full": "궁둥뼈(좌골), ischium", "x": 36.89, "y": 53.09, "w": 4.29, "h": 2.16, "alt": "좌골" },
+            { "answer": "넓적다리뼈", "full": "넓적다리뼈 (femur)", "x": 52.22, "y": 63.86, "w": 9.98, "h": 1.44 },
+            { "answer": "종아리뼈", "full": "종아리뼈 (fibula)", "x": 53.18, "y": 76.32, "w": 8.69, "h": 1.71 },
+            { "answer": "정강뼈", "full": "정강뼈 (tibia)", "x": 54.14, "y": 79.36, "w": 7.02, "h": 1.44 },
+            { "answer": "발허리뼈", "full": "발허리뼈 (metatarsal)", "x": 52.26, "y": 87.77727272727273, "w": 15.93393852065322, "h": 1.8045454545454547 },
+            { "answer": "발가락뼈", "full": "발가락뼈 (phalanges)", "x": 52.16, "y": 91.24909090909091, "w": 12.003938520653218, "h": 1.6136363636363635 },
+            { "answer": "마루뼈", "full": "마루뼈 (parietal)", "x": 52.73, "y": 10.729090909090909, "w": 7.81, "h": 2.5309090909090908 },
+            { "answer": "뒤통수뼈", "full": "뒤통수뼈 (occipital)", "x": 48.27, "y": 14.36, "w": 13.56, "h": 1.44 },
+            { "answer": "목척추", "full": "목척추 (cervical spine)", "x": 83.43, "y": 19.27, "w": 15.5, "h": 2.86 },
+            { "answer": "등척추", "full": "등척추 (thoracic spine)", "x": 88.42, "y": 30.18, "w": 11.04, "h": 3.05 },
+            { "answer": "허리척추", "full": "허리척추 (lumbar spine)", "x": 89.38, "y": 40, "w": 9.21, "h": 4.05 }
+        ];
+
+        let isEditMode = false;
+        let activeDrag = null;
+        let activeResize = null;
+        let startX, startY, startX_val, startY_val, startW_val, startH_val;
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            document.body.classList.toggle('edit-mode-active', isEditMode);
+            const btn = document.getElementById('toggle-edit');
+            const viewport = document.getElementById('game-viewport');
+            
+            if (isEditMode) {
+                btn.innerText = "편집 종료";
+                btn.classList.replace('bg-amber-500', 'bg-red-500');
+                viewport.classList.add('edit-mode');
+                createLabels();
+            } else {
+                btn.innerText = "편집 모드 시작";
+                btn.classList.replace('bg-red-500', 'bg-amber-500');
+                viewport.classList.remove('edit-mode');
+                createLabels();
+            }
+        }
+
+        function createLabels() {
+            const container = document.getElementById('game-viewport');
+            container.querySelectorAll('.label-container').forEach(m => m.remove());
+
+            labels.forEach((item, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'label-container';
+                wrapper.dataset.index = index;
+                wrapper.style.left = item.x + '%';
+                wrapper.style.top = item.y + '%';
+                wrapper.style.width = item.w + '%';
+                wrapper.style.height = item.h + '%';
+
+                const mask = document.createElement('div');
+                mask.className = 'label-mask';
+                mask.innerText = isEditMode ? (item.answer || '이름 설정') : '?';
+                
+                const input = document.createElement('input');
+                input.className = 'quiz-input';
+                
+                const result = document.createElement('div');
+                // align: "left"인 경우 result-align-left 클래스를 부여하여 왼쪽으로 정렬
+                const alignClass = item.align === 'left' ? 'result-align-left' : 'result-align-right';
+                result.className = `result-label ${alignClass}`;
+
+                wrapper.onclick = (e) => {
+                    if (isEditMode) {
+                        if (e.target.classList.contains('resize-handle')) return;
+                        const newAns = prompt("정답 명칭(한글):", item.answer || "");
+                        const newFull = prompt("전체 표시 이름(한글+영문 권장):", item.full || "");
+                        const alignSide = confirm("정답 표시 시 왼쪽으로 펼쳐지게 하시겠습니까? (확인=왼쪽, 취소=오른쪽)") ? "left" : "right";
+                        if (newAns) {
+                            item.answer = newAns;
+                            item.full = newFull || newAns;
+                            item.align = alignSide;
+                            createLabels();
+                        }
+                        return;
+                    }
+                    mask.style.display = 'none';
+                    input.style.display = 'block';
+                    input.focus();
+                };
+
+                wrapper.oncontextmenu = (e) => {
+                    if (isEditMode) {
+                        e.preventDefault();
+                        if (confirm(`'${item.answer}' 상자를 삭제하시겠습니까?`)) {
+                            labels.splice(index, 1);
+                            createLabels();
+                        }
+                    }
+                };
+
+                if (isEditMode) {
+                    ['tl', 'tr', 'bl', 'br'].forEach(type => {
+                        const handle = document.createElement('div');
+                        handle.className = `resize-handle handle-${type}`;
+                        handle.dataset.type = type;
+                        handle.onmousedown = (e) => {
+                            e.stopPropagation();
+                            activeResize = { el: wrapper, type: type, index: index };
+                            startX = e.clientX;
+                            startY = e.clientY;
+                            startX_val = item.x;
+                            startY_val = item.y;
+                            startW_val = item.w;
+                            startH_val = item.h;
+                        };
+                        wrapper.appendChild(handle);
+                    });
+                }
+
+                input.onkeydown = (e) => {
+                    if (e.key === 'Enter') checkAnswer(input.value, item, input, result);
+                };
+
+                wrapper.appendChild(mask);
+                wrapper.appendChild(input);
+                wrapper.appendChild(result);
+                container.appendChild(wrapper);
+            });
+            if(isEditMode) initDraggable();
+        }
+
+        function initDraggable() {
+            const containers = document.querySelectorAll('.label-container');
+            containers.forEach(el => {
+                el.onmousedown = function(e) {
+                    if (!isEditMode || activeResize) return;
+                    activeDrag = el;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    startX_val = labels[el.dataset.index].x;
+                    startY_val = labels[el.dataset.index].y;
+                    e.preventDefault();
+                };
+            });
+        }
+
+        window.onmousemove = function(e) {
+            const viewport = document.getElementById('game-viewport');
+            const vWidth = viewport.offsetWidth;
+            const vHeight = viewport.offsetHeight;
+
+            if (activeDrag && isEditMode) {
+                let dx = ((e.clientX - startX) / vWidth) * 100;
+                let dy = ((e.clientY - startY) / vHeight) * 100;
+                let newX = startX_val + dx;
+                let newY = startY_val + dy;
+                
+                activeDrag.style.left = newX.toFixed(2) + '%';
+                activeDrag.style.top = newY.toFixed(2) + '%';
+                
+                let idx = activeDrag.dataset.index;
+                labels[idx].x = parseFloat(newX.toFixed(2));
+                labels[idx].y = parseFloat(newY.toFixed(2));
+            } 
+            else if (activeResize && isEditMode) {
+                let dx = ((e.clientX - startX) / vWidth) * 100;
+                let dy = ((e.clientY - startY) / vHeight) * 100;
+                let idx = activeResize.index;
+                let item = labels[idx];
+
+                switch(activeResize.type) {
+                    case 'br':
+                        item.w = Math.max(1, startW_val + dx);
+                        item.h = Math.max(1, startH_val + dy);
+                        break;
+                    case 'bl':
+                        item.x = startX_val + dx;
+                        item.w = Math.max(1, startW_val - dx);
+                        item.h = Math.max(1, startH_val + dy);
+                        break;
+                    case 'tr':
+                        item.y = startY_val + dy;
+                        item.w = Math.max(1, startW_val + dx);
+                        item.h = Math.max(1, startH_val - dy);
+                        break;
+                    case 'tl':
+                        item.x = startX_val + dx;
+                        item.y = startY_val + dy;
+                        item.w = Math.max(1, startW_val - dx);
+                        item.h = Math.max(1, startH_val - dy);
+                        break;
+                }
+
+                activeResize.el.style.left = item.x + '%';
+                activeResize.el.style.top = item.y + '%';
+                activeResize.el.style.width = item.w + '%';
+                activeResize.el.style.height = item.h + '%';
+            }
+        };
+
+        window.onmouseup = function() {
+            activeDrag = null;
+            activeResize = null;
+        };
+
+        function addNewLabel() {
+            labels.push({ answer: "새 상자", full: "새 상자", x: 45, y: 45, w: 9, h: 3, align: "right" });
+            createLabels();
+        }
+
+        function copyNewCoordinates() {
+            const dataStr = JSON.stringify(labels, null, 4);
+            const tempElem = document.createElement('textarea');
+            tempElem.value = dataStr;
+            document.body.appendChild(tempElem);
+            tempElem.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempElem);
+            alert("좌표 및 크기 데이터가 복사되었습니다!");
+        }
+
+        function checkAnswer(val, item, input, result) {
+            const userVal = val.trim().toLowerCase().replace(/\s+/g, "");
+            const korAns = item.answer.toLowerCase().replace(/\s+/g, "");
+            const altAns = item.alt ? item.alt.toLowerCase().replace(/\s+/g, "") : "";
+            
+            const fullStr = item.full.toLowerCase();
+            const engPart = (fullStr.match(/,\s*([a-z\s]+)/) || fullStr.match(/\(([^)]+)\)/))?.[1]?.trim().replace(/\s+/g, "") || "";
+            const korPartFromFull = fullStr.split(/[,\(]/)[0].trim().replace(/\s+/g, "");
+
+            const possibleAnswers = [
+                korAns,
+                altAns,
+                engPart,
+                korPartFromFull
+            ].filter(a => a !== "");
+
+            const isCorrect = possibleAnswers.some(ans => userVal === ans);
+
+            input.style.display = 'none';
+            result.innerText = item.full;
+            result.style.display = 'flex';
+            result.classList.add(isCorrect ? 'result-correct' : 'result-wrong');
+        }
+
+        function resetGame() { createLabels(); }
+
+        window.onload = () => {
+            const img = document.getElementById('main-img');
+            if (img.complete) createLabels();
+            else img.onload = createLabels;
+        };
+    </script>
+</body>
+</html>
