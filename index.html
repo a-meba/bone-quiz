@@ -103,6 +103,9 @@
         .edit-controls { display: none; gap: 8px; }
         .edit-mode-active .edit-controls { display: flex; }
 
+        /* 편집 버튼 영역 숨김 처리 */
+        .admin-only { display: none !important; }
+
         .guide-banner {
             background: #eff6ff; border-bottom: 1px solid #dbeafe;
             padding: 8px 24px; display: flex; align-items: center; gap: 12px;
@@ -121,11 +124,14 @@
                 </div>
             </div>
             <div class="flex gap-2">
-                <div class="edit-controls">
+                <!-- 편집 관련 컨트롤 그룹 (숨김 처리됨) -->
+                <div class="edit-controls admin-only">
                     <button onclick="addNewLabel()" class="px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 shadow-sm transition">상자 추가 +</button>
                     <button onclick="copyNewCoordinates()" class="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 shadow-sm transition">데이터 복사</button>
                 </div>
-                <button id="toggle-edit" onclick="toggleEditMode()" class="px-4 py-2 bg-amber-500 text-white font-bold rounded-lg hover:bg-amber-600 shadow-md transition">편집 모드 시작</button>
+                <!-- 편집 모드 토글 버튼 (숨김 처리됨) -->
+                <button id="toggle-edit" onclick="toggleEditMode()" class="admin-only px-4 py-2 bg-amber-500 text-white font-bold rounded-lg hover:bg-amber-600 shadow-md transition">편집 모드 시작</button>
+                
                 <button onclick="resetGame()" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200">초기화</button>
             </div>
         </header>
@@ -147,7 +153,7 @@
     </div>
 
     <script>
-        // 사용자가 제공한 최신 좌표 데이터로 업데이트됨
+        // 좌표 데이터
         let labels = [
             { "answer": "머리뼈", "full": "머리뼈 (skull)", "x": 10.95, "y": 14.65, "w": 3.64, "h": 2.65, "align": "left" },
             { "answer": "팔이음뼈", "full": "팔이음뼈 (shoulder girdle)", "x": 9.6, "y": 21.95, "w": 4.99, "h": 3.93, "align": "left" },
@@ -238,7 +244,6 @@
                 input.className = 'quiz-input';
                 
                 const result = document.createElement('div');
-                // align: "left"인 경우 result-align-left 클래스를 부여하여 왼쪽으로 정렬
                 const alignClass = item.align === 'left' ? 'result-align-left' : 'result-align-right';
                 result.className = `result-label ${alignClass}`;
 
