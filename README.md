@@ -7,7 +7,7 @@
 ---
 
 ## 🔗 주요 정보
-* **배포 URL** : [https://a-meba.github.io/medical-quiz/](https://a-meba.github.io/medical-quiz/)
+* **배포 URL** : [https://a-meba.github.io/bone-quiz/)
 * **최신 버전** : `v1.2.0 STABILITY UPDATE`
 * **지원 기기** : PC, 태블릿 (가로 모드 권장), 모바일
 
